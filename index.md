@@ -1,8 +1,12 @@
 ---
 title: krach.io
 subtitle: basic noise in rust
-author: Jonas Köhler, Anyere Bendrien
-author-url: https://argmin.xyz, https://github.com/Bendrien
+author: 
+    - Jonas Köhler
+    - Anyere Bendrien
+author-url: 
+    - https://argmin.xyz
+    - https://github.com/Bendrien
 date: 2024-09-8
 lang: en
 toc-title: Contents
