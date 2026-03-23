@@ -20,6 +20,11 @@ $endif$
 $for(css)$
   <link rel="stylesheet" href="$css$" />
 $endfor$
+$if(highlighting-css)$
+  <style type="text/css">
+$highlighting-css$
+  </style>
+$endif$
 $for(header-includes)$
   $header-includes$
 $endfor$
