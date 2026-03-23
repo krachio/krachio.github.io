@@ -15,7 +15,7 @@ version: v1.0
 
 ## What is krach?
 
-A live coding audio system. Write synths in Python, sequence them with composable patterns, hear changes instantly. One process, zero latency.
+A live coding audio system. Write synths in Python, wire them as a graph, sequence with composable patterns, hear changes instantly.
 
 ```python
 import krach.dsp as krs
@@ -28,28 +28,51 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-kr.voice("bass", acid_bass, gain=0.3)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
-kr.play("bass/cutoff", kr.mod_sine(200, 2000).over(4))
+bass = kr.node("bass", acid_bass, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+bass >> verb                                       # route
+bass @ kr.seq("A2", "D3", None, "E2").over(2)      # play
+bass["cutoff"] = 1200                               # control
 ```
 
 ## How it works
 
-**Python** defines synths and patterns. **Rust** runs the audio engine. **FAUST** compiles DSP to native code via LLVM JIT.
+**Python** defines synths and patterns. **Rust** runs the engine. **FAUST** JIT-compiles DSP to native audio.
 
 ```
 Python (define)          Rust (execute)              Audio
 ──────────────           ──────────────              ─────
-kr.voice("bass", fn) →  FAUST JIT compile       →  CoreAudio
-kr.play("bass", pat) →  pattern → curves         →  block-rate automation
-kr.set("bass/cut", v) → SetControl               →  node parameter
+kr.node("bass", fn)  →  FAUST JIT compile       →  CoreAudio
+bass @ pattern       →  pattern → curves         →  block-rate automation
+bass["cutoff"] = v   →  SetControl               →  node parameter
+bass >> verb         →  graph rebuild + crossfade →  seamless routing
 ```
 
-Two symbols: `kr` (the mixer) and `krs` (DSP primitives). That's the entire API.
+Two symbols: `kr` (the audio graph) and `krs` (DSP primitives). That's the entire API.
 
-## Features
+## Operator DSL
 
-**Synth design** — write DSP functions in Python, they transpile to FAUST and JIT-compile to native audio. Hot reload: edit a function, hear the change.
+Everything is a node. Routing uses `>>`. Patterns use `@`. Controls use `[]`.
+
+```python
+bass = kr.node("bass", bass_fn, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+
+bass >> verb                           # route signal
+bass >> (verb, 0.4)                    # route with send level
+bass @ kr.seq("A2", "D3").over(2)      # play pattern
+bass @ "A2 D3 ~ E2"                   # mini-notation shorthand
+bass @ None                            # hush
+bass["cutoff"] = 1200                  # set control
+
+with kr.transition(bars=8):           # all changes fade over 8 bars
+    bass["gain"] = 0.8
+    kr.tempo = 140
+```
+
+## Synth design
+
+Write DSP functions in Python. They transpile to FAUST and JIT-compile via LLVM. Hot reload on save. Auto-smoothing on all non-gate parameters.
 
 ```python
 @kr.dsp
@@ -59,16 +82,9 @@ def kick() -> krs.Signal:
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 ```
 
-**Composable patterns** — TidalCycles-inspired algebra. Sequence, layer, stretch, swing.
+## Pattern algebra
 
-```python
-kr.play("kick", kr.hit() * 4)                          # 4 on the floor
-kr.play("hat",  (kr.rest() + kr.hit()) * 4)             # offbeat
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2)) # bass line
-kr.play("hat",  (kr.hit() * 8).swing(0.67))             # swung 8ths
-```
-
-**Pattern algebra** — everything returns a pattern, compose infinitely:
+TidalCycles-inspired composable patterns. Every operation returns a pattern.
 
 ```python
 a + b           # sequence
@@ -76,37 +92,28 @@ a | b           # layer (simultaneous)
 p * 4           # repeat
 p.over(2)       # stretch to 2 cycles
 p.swing(0.67)   # swing feel
-p.every(4, lambda p: p.reverse())   # transform every 4th cycle
-p.spread(3, 8)  # euclidean rhythm
-```
+p.mask("1 1 0 1")           # suppress events
+p.sometimes(0.3, reverse)   # probabilistic transform
+p.every(4, reverse)          # transform every 4th cycle
+p.spread(3, 8)               # euclidean rhythm
 
-**Effect routing** — buses, sends, wires:
-
-```python
-kr.bus("verb", reverb_fn, gain=0.3)
-kr.send("bass", "verb", level=0.4)
-```
-
-**Live performance** — mute, solo, fade, save, export:
-
-```python
-kr.fade("bass/gain", 0.0, bars=4)
-kr.mute("drums")
-kr.export("my_session.py")
+kr.struct(rhythm, melody)    # impose rhythm onto melody
+kr.cat(a, b, c)             # play each for 1 cycle, loop
+kr.p("x . x . x . . x")    # mini-notation
 ```
 
 ## Architecture
 
-Single-process Rust binary. Pattern IR compiles to block-rate automation curves (~172 updates/sec) — no per-event IPC during playback. Lock-free audio thread.
+Single-process Rust binary. Patterns compile to block-rate automation curves (~172 updates/sec). Lock-free audio thread. FAUST hot-reload.
 
 ```
 noise/
 ├── audio-engine/      Rust — graph runtime, crossfade, automation
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
-├── krach-engine/      Rust — unified binary
+├── krach-engine/      Rust — unified binary (one process, one socket)
 ├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL
+└── krach/             Python — live coding REPL, operator DSL
 ```
 
 ## Install

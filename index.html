@@ -40,7 +40,10 @@ KöhlerAnyere Bendrien</cite></a></td>
 <li><a href="#what-is-krach" id="toc-what-is-krach">What is
 krach?</a></li>
 <li><a href="#how-it-works" id="toc-how-it-works">How it works</a></li>
-<li><a href="#features" id="toc-features">Features</a></li>
+<li><a href="#operator-dsl" id="toc-operator-dsl">Operator DSL</a></li>
+<li><a href="#synth-design" id="toc-synth-design">Synth design</a></li>
+<li><a href="#pattern-algebra" id="toc-pattern-algebra">Pattern
+algebra</a></li>
 <li><a href="#architecture" id="toc-architecture">Architecture</a></li>
 <li><a href="#install" id="toc-install">Install</a></li>
 <li><a href="#links" id="toc-links">Links</a></li>
@@ -48,9 +51,8 @@ krach?</a></li>
 </ul>
 </nav>
 <h2 id="what-is-krach">What is krach?</h2>
-<p>A live coding audio system. Write synths in Python, sequence them
-with composable patterns, hear changes instantly. One process, zero
-latency.</p>
+<p>A live coding audio system. Write synths in Python, wire them as a
+graph, sequence with composable patterns, hear changes instantly.</p>
 <div class="sourceCode" id="cb1"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> krach.dsp <span class="im">as</span> krs</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -62,78 +64,87 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a hr
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    env <span class="op">=</span> krs.adsr(<span class="fl">0.005</span>, <span class="fl">0.15</span>, <span class="fl">0.3</span>, <span class="fl">0.08</span>, gate)</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> krs.lowpass(krs.saw(freq), cutoff) <span class="op">*</span> env <span class="op">*</span> <span class="fl">0.55</span></span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>kr.voice(<span class="st">&quot;bass&quot;</span>, acid_bass, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;bass&quot;</span>, kr.seq(<span class="st">&quot;A2&quot;</span>, <span class="st">&quot;D3&quot;</span>, <span class="va">None</span>, <span class="st">&quot;E2&quot;</span>).over(<span class="dv">2</span>))</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;bass/cutoff&quot;</span>, kr.mod_sine(<span class="dv">200</span>, <span class="dv">2000</span>).over(<span class="dv">4</span>))</span></code></pre></div>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>bass <span class="op">=</span> kr.node(<span class="st">&quot;bass&quot;</span>, acid_bass, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>verb <span class="op">=</span> kr.node(<span class="st">&quot;verb&quot;</span>, reverb_fn, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>bass <span class="op">&gt;&gt;</span> verb                                       <span class="co"># route</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>bass <span class="op">@</span> kr.seq(<span class="st">&quot;A2&quot;</span>, <span class="st">&quot;D3&quot;</span>, <span class="va">None</span>, <span class="st">&quot;E2&quot;</span>).over(<span class="dv">2</span>)      <span class="co"># play</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>bass[<span class="st">&quot;cutoff&quot;</span>] <span class="op">=</span> <span class="dv">1200</span>                               <span class="co"># control</span></span></code></pre></div>
 <h2 id="how-it-works">How it works</h2>
 <p><strong>Python</strong> defines synths and patterns.
-<strong>Rust</strong> runs the audio engine. <strong>FAUST</strong>
-compiles DSP to native code via LLVM JIT.</p>
+<strong>Rust</strong> runs the engine. <strong>FAUST</strong>
+JIT-compiles DSP to native audio.</p>
 <pre><code>Python (define)          Rust (execute)              Audio
 ──────────────           ──────────────              ─────
-kr.voice(&quot;bass&quot;, fn) →  FAUST JIT compile       →  CoreAudio
-kr.play(&quot;bass&quot;, pat) →  pattern → curves         →  block-rate automation
-kr.set(&quot;bass/cut&quot;, v) → SetControl               →  node parameter</code></pre>
-<p>Two symbols: <code>kr</code> (the mixer) and <code>krs</code> (DSP
-primitives). That’s the entire API.</p>
-<h2 id="features">Features</h2>
-<p><strong>Synth design</strong> — write DSP functions in Python, they
-transpile to FAUST and JIT-compile to native audio. Hot reload: edit a
-function, hear the change.</p>
+kr.node(&quot;bass&quot;, fn)  →  FAUST JIT compile       →  CoreAudio
+bass @ pattern       →  pattern → curves         →  block-rate automation
+bass[&quot;cutoff&quot;] = v   →  SetControl               →  node parameter
+bass &gt;&gt; verb         →  graph rebuild + crossfade →  seamless routing</code></pre>
+<p>Two symbols: <code>kr</code> (the audio graph) and <code>krs</code>
+(DSP primitives). That’s the entire API.</p>
+<h2 id="operator-dsl">Operator DSL</h2>
+<p>Everything is a node. Routing uses <code>&gt;&gt;</code>. Patterns
+use <code>@</code>. Controls use <code>[]</code>.</p>
 <div class="sourceCode" id="cb3"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="at">@kr.dsp</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kick() <span class="op">-&gt;</span> krs.Signal:</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    gate <span class="op">=</span> krs.control(<span class="st">&quot;gate&quot;</span>, <span class="fl">0.0</span>, <span class="fl">0.0</span>, <span class="fl">1.0</span>)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    env <span class="op">=</span> krs.adsr(<span class="fl">0.001</span>, <span class="fl">0.25</span>, <span class="fl">0.0</span>, <span class="fl">0.05</span>, gate)</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> krs.sine_osc(<span class="fl">55.0</span> <span class="op">+</span> env <span class="op">*</span> <span class="fl">200.0</span>) <span class="op">*</span> env <span class="op">*</span> <span class="fl">0.9</span></span></code></pre></div>
-<p><strong>Composable patterns</strong> — TidalCycles-inspired algebra.
-Sequence, layer, stretch, swing.</p>
+class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>bass <span class="op">=</span> kr.node(<span class="st">&quot;bass&quot;</span>, bass_fn, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>verb <span class="op">=</span> kr.node(<span class="st">&quot;verb&quot;</span>, reverb_fn, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>bass <span class="op">&gt;&gt;</span> verb                           <span class="co"># route signal</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>bass <span class="op">&gt;&gt;</span> (verb, <span class="fl">0.4</span>)                    <span class="co"># route with send level</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>bass <span class="op">@</span> kr.seq(<span class="st">&quot;A2&quot;</span>, <span class="st">&quot;D3&quot;</span>).over(<span class="dv">2</span>)      <span class="co"># play pattern</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>bass <span class="op">@</span> <span class="st">&quot;A2 D3 ~ E2&quot;</span>                   <span class="co"># mini-notation shorthand</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>bass <span class="op">@</span> <span class="va">None</span>                            <span class="co"># hush</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>bass[<span class="st">&quot;cutoff&quot;</span>] <span class="op">=</span> <span class="dv">1200</span>                  <span class="co"># set control</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> kr.transition(bars<span class="op">=</span><span class="dv">8</span>):           <span class="co"># all changes fade over 8 bars</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    bass[<span class="st">&quot;gain&quot;</span>] <span class="op">=</span> <span class="fl">0.8</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    kr.tempo <span class="op">=</span> <span class="dv">140</span></span></code></pre></div>
+<h2 id="synth-design">Synth design</h2>
+<p>Write DSP functions in Python. They transpile to FAUST and
+JIT-compile via LLVM. Hot reload on save. Auto-smoothing on all non-gate
+parameters.</p>
 <div class="sourceCode" id="cb4"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;kick&quot;</span>, kr.hit() <span class="op">*</span> <span class="dv">4</span>)                          <span class="co"># 4 on the floor</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;hat&quot;</span>,  (kr.rest() <span class="op">+</span> kr.hit()) <span class="op">*</span> <span class="dv">4</span>)             <span class="co"># offbeat</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;bass&quot;</span>, kr.seq(<span class="st">&quot;A2&quot;</span>, <span class="st">&quot;D3&quot;</span>, <span class="va">None</span>, <span class="st">&quot;E2&quot;</span>).over(<span class="dv">2</span>)) <span class="co"># bass line</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;hat&quot;</span>,  (kr.hit() <span class="op">*</span> <span class="dv">8</span>).swing(<span class="fl">0.67</span>))             <span class="co"># swung 8ths</span></span></code></pre></div>
-<p><strong>Pattern algebra</strong> — everything returns a pattern,
-compose infinitely:</p>
+class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="at">@kr.dsp</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kick() <span class="op">-&gt;</span> krs.Signal:</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    gate <span class="op">=</span> krs.control(<span class="st">&quot;gate&quot;</span>, <span class="fl">0.0</span>, <span class="fl">0.0</span>, <span class="fl">1.0</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    env <span class="op">=</span> krs.adsr(<span class="fl">0.001</span>, <span class="fl">0.25</span>, <span class="fl">0.0</span>, <span class="fl">0.05</span>, gate)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> krs.sine_osc(<span class="fl">55.0</span> <span class="op">+</span> env <span class="op">*</span> <span class="fl">200.0</span>) <span class="op">*</span> env <span class="op">*</span> <span class="fl">0.9</span></span></code></pre></div>
+<h2 id="pattern-algebra">Pattern algebra</h2>
+<p>TidalCycles-inspired composable patterns. Every operation returns a
+pattern.</p>
 <div class="sourceCode" id="cb5"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>a <span class="op">+</span> b           <span class="co"># sequence</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>a <span class="op">|</span> b           <span class="co"># layer (simultaneous)</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>p <span class="op">*</span> <span class="dv">4</span>           <span class="co"># repeat</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>p.over(<span class="dv">2</span>)       <span class="co"># stretch to 2 cycles</span></span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>p.swing(<span class="fl">0.67</span>)   <span class="co"># swing feel</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>p.every(<span class="dv">4</span>, <span class="kw">lambda</span> p: p.reverse())   <span class="co"># transform every 4th cycle</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>p.spread(<span class="dv">3</span>, <span class="dv">8</span>)  <span class="co"># euclidean rhythm</span></span></code></pre></div>
-<p><strong>Effect routing</strong> — buses, sends, wires:</p>
-<div class="sourceCode" id="cb6"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>kr.bus(<span class="st">&quot;verb&quot;</span>, reverb_fn, gain<span class="op">=</span><span class="fl">0.3</span>)</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>kr.send(<span class="st">&quot;bass&quot;</span>, <span class="st">&quot;verb&quot;</span>, level<span class="op">=</span><span class="fl">0.4</span>)</span></code></pre></div>
-<p><strong>Live performance</strong> — mute, solo, fade, save,
-export:</p>
-<div class="sourceCode" id="cb7"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>kr.fade(<span class="st">&quot;bass/gain&quot;</span>, <span class="fl">0.0</span>, bars<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>kr.mute(<span class="st">&quot;drums&quot;</span>)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>kr.export(<span class="st">&quot;my_session.py&quot;</span>)</span></code></pre></div>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>p.mask(<span class="st">&quot;1 1 0 1&quot;</span>)           <span class="co"># suppress events</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>p.sometimes(<span class="fl">0.3</span>, reverse)   <span class="co"># probabilistic transform</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>p.every(<span class="dv">4</span>, reverse)          <span class="co"># transform every 4th cycle</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>p.spread(<span class="dv">3</span>, <span class="dv">8</span>)               <span class="co"># euclidean rhythm</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>kr.struct(rhythm, melody)    <span class="co"># impose rhythm onto melody</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>kr.cat(a, b, c)             <span class="co"># play each for 1 cycle, loop</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>kr.p(<span class="st">&quot;x . x . x . . x&quot;</span>)    <span class="co"># mini-notation</span></span></code></pre></div>
 <h2 id="architecture">Architecture</h2>
-<p>Single-process Rust binary. Pattern IR compiles to block-rate
-automation curves (~172 updates/sec) — no per-event IPC during playback.
-Lock-free audio thread.</p>
+<p>Single-process Rust binary. Patterns compile to block-rate automation
+curves (~172 updates/sec). Lock-free audio thread. FAUST hot-reload.</p>
 <pre><code>noise/
 ├── audio-engine/      Rust — graph runtime, crossfade, automation
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
-├── krach-engine/      Rust — unified binary
+├── krach-engine/      Rust — unified binary (one process, one socket)
 ├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL</code></pre>
+└── krach/             Python — live coding REPL, operator DSL</code></pre>
 <h2 id="install">Install</h2>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prerequisites: macOS, Rust, Python 3.13+, uv, FAUST + LLVM</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">brew</span> install faust llvm</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LLVM_SYS_181_PREFIX</span><span class="op">=</span><span class="va">$(</span><span class="ex">brew</span> <span class="at">--prefix</span> llvm<span class="va">)</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/krachio/noise.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> noise</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> build <span class="at">--release</span> <span class="at">-p</span> krach-engine</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> krach <span class="kw">&amp;&amp;</span> <span class="ex">uv</span> sync <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> ..</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">./bin/krach</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prerequisites: macOS, Rust, Python 3.13+, uv, FAUST + LLVM</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">brew</span> install faust llvm</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LLVM_SYS_181_PREFIX</span><span class="op">=</span><span class="va">$(</span><span class="ex">brew</span> <span class="at">--prefix</span> llvm<span class="va">)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/krachio/noise.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> noise</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> build <span class="at">--release</span> <span class="at">-p</span> krach-engine</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> krach <span class="kw">&amp;&amp;</span> <span class="ex">uv</span> sync <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> ..</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="ex">./bin/krach</span></span></code></pre></div>
 <h2 id="links">Links</h2>
 <p><a href="https://krach.io/noise/docs/">Documentation</a> · <a
 href="https://github.com/krachio/noise">GitHub</a> · <a
