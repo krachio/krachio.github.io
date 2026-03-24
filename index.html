@@ -171,11 +171,13 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a hr
 JIT-compile via LLVM. Hot reload on save. Auto-smoothing on all non-gate
 parameters.</p>
 <div class="sourceCode" id="cb4"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="at">@kr.dsp</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kick() <span class="op">-&gt;</span> krs.Signal:</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    gate <span class="op">=</span> krs.control(<span class="st">&quot;gate&quot;</span>, <span class="fl">0.0</span>, <span class="fl">0.0</span>, <span class="fl">1.0</span>)</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    env <span class="op">=</span> krs.adsr(<span class="fl">0.001</span>, <span class="fl">0.25</span>, <span class="fl">0.0</span>, <span class="fl">0.05</span>, gate)</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> krs.sine_osc(<span class="fl">55.0</span> <span class="op">+</span> env <span class="op">*</span> <span class="fl">200.0</span>) <span class="op">*</span> env <span class="op">*</span> <span class="fl">0.9</span></span></code></pre></div>
+class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kick() <span class="op">-&gt;</span> krs.Signal:</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    gate <span class="op">=</span> krs.control(<span class="st">&quot;gate&quot;</span>, <span class="fl">0.0</span>, <span class="fl">0.0</span>, <span class="fl">1.0</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    env <span class="op">=</span> krs.adsr(<span class="fl">0.001</span>, <span class="fl">0.25</span>, <span class="fl">0.0</span>, <span class="fl">0.05</span>, gate)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> krs.sine_osc(<span class="fl">55.0</span> <span class="op">+</span> env <span class="op">*</span> <span class="fl">200.0</span>) <span class="op">*</span> env <span class="op">*</span> <span class="fl">0.9</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>kr.node(<span class="st">&quot;kick&quot;</span>, kick, gain<span class="op">=</span><span class="fl">0.8</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>kr.play(<span class="st">&quot;kick&quot;</span>, kr.hit() <span class="op">*</span> <span class="dv">4</span>)</span></code></pre></div>
 <h2 id="pattern-algebra">Pattern algebra</h2>
 <p>TidalCycles-inspired composable patterns. Every operation returns a
 pattern.</p>
@@ -201,8 +203,7 @@ curves (~172 updates/sec). Lock-free audio thread. FAUST hot-reload.</p>
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
 ├── krach-engine/      Rust — unified binary (one process, one socket)
-├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL, operator DSL</code></pre>
+└── krach/             Python — live coding REPL, IR, DSP transpiler, patterns</code></pre>
 <h2 id="install">Install</h2>
 <div class="sourceCode" id="cb7"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prerequisites: macOS, Rust, Python 3.13+, uv, FAUST + LLVM</span></span>

@@ -79,11 +79,13 @@ with kr.transition(bars=8):           # all changes fade over 8 bars
 Write DSP functions in Python. They transpile to FAUST and JIT-compile via LLVM. Hot reload on save. Auto-smoothing on all non-gate parameters.
 
 ```python
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
+
+kr.node("kick", kick, gain=0.8)
+kr.play("kick", kr.hit() * 4)
 ```
 
 ## Pattern algebra
@@ -116,8 +118,7 @@ noise/
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
 ├── krach-engine/      Rust — unified binary (one process, one socket)
-├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL, operator DSL
+└── krach/             Python — live coding REPL, IR, DSP transpiler, patterns
 ```
 
 ## Install
