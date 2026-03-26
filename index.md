@@ -118,7 +118,8 @@ noise/
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
 ├── krach-engine/      Rust — unified binary (one process, one socket)
-└── krach/             Python — live coding REPL, IR, DSP transpiler, patterns
+├── krach/             Python — live coding REPL, IR, DSP transpiler, patterns
+└── krach-mcp/         Python — MCP server (25 tools for Claude Code to drive krach)
 ```
 
 ## Install
