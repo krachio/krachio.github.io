@@ -137,7 +137,7 @@ cd krach && uv sync && cd ..
 
 ## Links
 
-[Documentation](https://krach.io/noise/docs/) · [GitHub](https://github.com/krachio/noise) · [Try it](https://krach.io/noise/try/) · [MIT License](https://github.com/krachio/noise/blob/main/LICENSE)
+[Documentation](https://krach.io/noise/docs/) · [GitHub](https://github.com/krachio/noise) · [Try it](https://krach.io/noise/try/) · [GPL-2.0-or-later](https://github.com/krachio/noise/blob/main/LICENSE)
 
 ## Credits
 
